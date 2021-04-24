@@ -11,6 +11,9 @@ import torch.optim as optim
 import torch.nn as nn
 from torchvision import datasets, models, transforms
 import os
+from tqdm import tqdm
+from time import sleep
+import math
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,18 +32,24 @@ def imshow(img):
 
 
 
-def train(model_ft,model_name,model_input_size,grafico,classes,batch,epochs_without_learning,kfold):
+def train(model_ft,model_name,model_input_size,grafico,classes,batch,epochs_without_learning,kfold,pretrain):
 
    ##Parametros para o treinomento
 
    #Seleciona os parametros a serem atualizados.Como estamos utilizando transfer leaning, querendo selecionar apenas o classifer.
    params_to_update = []
-   for name,param in model_ft.named_parameters():
-      if param.requires_grad == True:
-         params_to_update.append(param)
+   if(pretrain == True):
+      print("Apenas última camada marcada para otimização")
+      for name,param in model_ft.named_parameters():
+         if param.requires_grad == True:
+            params_to_update.append(param)
+   elif(pretrain == False):
+      print("Todos os named parameters marcados para otimização")
+      for name,param in model_ft.named_parameters():
+         params_to_update.append(param)      
 
    #optimizer_ft = optim.SGD(params_to_update, lr=0.001,momentum=0.9)
-   optimizer_ft = optim.Adam(params_to_update, lr=0.0003)
+   optimizer_ft = optim.Adam(params_to_update, lr=0.0001)
 
   # nSamples = [0.5, 1]
   # class_weights = torch.FloatTensor(nSamples)
@@ -83,7 +92,7 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
      
    #Carrega o modelo salvo em disco apenas se nao estiver dentro do loop de train e estiver apenas em evaluation
    if not inside_trainning:
-      model_ft.load_state_dict(torch.load(save_dir,map_location=torch.device('cpu')))
+      model_ft.load_state_dict(torch.load(save_dir,map_location=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")))
    #Seta o modelo para evaluation
    model_ft.eval()
 
@@ -100,42 +109,43 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
    total = 0
    images_processed = 0
    #n lembro
-   with torch.no_grad():
-      since = time.time()
-      for data in dataloaders_dict['val']:
-         images_processed+=1
-         
-         images, labels = data
-         images_print = images
-         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-         images = images.to(device)
-         labels = labels.to(device)
-         outputs = model_ft(images)
-         _, predicted = torch.max(outputs.data, 1)
-         total += labels.size(0)
-         x.append(total)
+   with tqdm(total=math.ceil(len(dataloaders_dict['val'].dataset))) as pbar:
+      with torch.no_grad():
+         since = time.time()
+         for data in dataloaders_dict['val']:
+            images_processed+=1
+            pbar.update(1)
+            images, labels = data
+            images_print = images
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            images = images.to(device)
+            labels = labels.to(device)
+            outputs = model_ft(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            x.append(total)
 
-         sm = torch.nn.Softmax(dim=1)
-         probabilities = sm(outputs)
-         
-         #Benigna = 0
-         #Maligna = 1
-         if(labels.numpy()[0] == 0 and predicted.numpy()[0] == 0):
-            true_negative = true_negative + 1
-         elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 1):
-            true_positive = true_positive + 1
-         elif(labels.numpy()[0] == 0 and predicted.numpy()[0] == 1):
-            false_positive = false_positive + 1        
-         elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 0):
-            false_negative = false_negative + 1    
-         
-         if not((predicted == labels).sum().item()):
-             print('Imagem classificada incorretamente:')
-             print("Probabilidade BENIGNA : %.2f%% Probabilidade MALIGNA : %.2f%%" % (probabilities.data[0][0].item()*100,probabilities.data[0][1].item()*100) ) #Converted to probabilities
-             #imshow(torchvision.utils.make_grid(images_print))
-         correct += (predicted == labels).sum().item()
-         y.append(correct/total)
-         #print('Imagens Processadas : {}'.format(images_processed))
+            sm = torch.nn.Softmax(dim=1)
+            probabilities = sm(outputs)
+            
+            #Benigna = 0
+            #Maligna = 1
+            if(labels.numpy()[0] == 0 and predicted.numpy()[0] == 0):
+               true_negative = true_negative + 1
+            elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 1):
+               true_positive = true_positive + 1
+            elif(labels.numpy()[0] == 0 and predicted.numpy()[0] == 1):
+               false_positive = false_positive + 1        
+            elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 0):
+               false_negative = false_negative + 1    
+            
+            #if not((predicted == labels).sum().item()):
+            #   print('Imagem classificada incorretamente:')
+            #   print("Probabilidade BENIGNA : %.2f%% Probabilidade MALIGNA : %.2f%%" % (probabilities.data[0][0].item()*100,probabilities.data[0][1].item()*100) ) #Converted to probabilities
+               #imshow(torchvision.utils.make_grid(images_print))
+            correct += (predicted == labels).sum().item()
+            y.append(correct/total)
+            #print('Imagens Processadas : {}'.format(images_processed))
    time_elapsed = time.time() - since
    print("True Positive (Imagem Maligna classificada como maligna)= %d\nTrue Negative (Imagen Benigna classificada como benigna) = %d\nFalse Positive (Imagem Benigna classificada como maligna) = %d\nFalse Negative(Imagen Maligna classificada como benigna) = %d\n" % (true_positive,true_negative,false_positive,false_negative))
    array = [[true_positive,false_negative],[false_positive,true_negative]]
@@ -162,10 +172,24 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
       filetowrite.write("Quantidade de Imagens Classificadas Incorretamente = %d\n\n" % (erros))
 
       acuracia = acertos/quantidade_de_imagens
-      especificidade = true_negative/(true_negative+false_positive)
-      sensibilidade = true_positive/(true_positive+false_negative)
-      precisao = true_positive/(true_positive+false_positive)
-      f1measure = 2 * ((precisao * sensibilidade) / (precisao + sensibilidade))
+      if(true_negative+false_positive == 0):
+         especificidade = 0
+      else:
+         especificidade = true_negative/(true_negative+false_positive)
+      
+      if(true_positive+false_negative == 0):
+         sensibilidade = 0
+      else:  
+         sensibilidade = true_positive/(true_positive+false_negative)
+      
+      if(true_positive+false_positive == 0):
+         precisao = 0
+      else:
+         precisao = true_positive/(true_positive+false_positive)
+      if(precisao + sensibilidade == 0):
+         f1measure = 0
+      else:
+         f1measure = 2 * ((precisao * sensibilidade) / (precisao + sensibilidade))
 
       filetowrite.write("Acurácia (Taxa de acertos das amostras totais)=  %.3f\n" % (acuracia))  
       filetowrite.write("Especificidade (Representa a probabilidade do classificador identificar corretamente a classe benigna) = %.3f\n" % (especificidade)) 
@@ -208,13 +232,14 @@ def statistics_plot(model_name,mode):
    return grafico
 
 
-def computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold):
+def computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold,pretrain):
 
       # Cria a arquitetura densene1t pre-treinada
       print('Inicializando a rede...')
       print('Estrutura da {}: '.format(model_name))
-      model_ft, model_input_size= new_model(classes = classes, pretrained = False,model_name=model_name)
+      model_ft, model_input_size= new_model(classes,model_name,pretrain)
       print(model_ft)
+      print("Pré-Treinada = %s" % pretrain)
 
       #Inicializa objeto para criacao dos graficos
       if(kfold < 2):
@@ -222,7 +247,7 @@ def computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kf
       else:
           grafico = statistics_plot(model_name,'kfold')
 
-      model_ft = train(model_ft,model_name,model_input_size,grafico,classes,batch,epochs_without_learning,kfold)
+      model_ft = train(model_ft,model_name,model_input_size,grafico,classes,batch,epochs_without_learning,kfold,pretrain)
       #Testa a rede sobre o dataset de test
       eval(grafico,model_input_size,model_name,model_ft,inside_trainning=True)
       save_dir = "./modelo_treinado/"+model_name+"-best"+".pth"
@@ -236,9 +261,9 @@ def computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kf
       grafico.write_html(save_dir_grafico)
 
 
-def computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold):
+def computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,pretrained):
    save_dir_grafico = "./modelo_treinado/"+model_name+"eval-only"+".html"
-   model_ft, model_input_size= new_model(classes = classes, pretrained = True,model_name=model_name)
+   model_ft, model_input_size= new_model(classes,model_name,pretrained)
    grafico = statistics_plot(model_name,'eval')
    eval(grafico,model_input_size,model_name,model_ft,inside_trainning=False)
    grafico.show()
@@ -249,15 +274,16 @@ def computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold):
 classes = 2
 batch = 32
 epochs_without_learning = 5
+pretrain = True
 model_name='alexnet'
 #IF k fold < 2 the trainning will be done with train/val method,otherwise with kfold validation
 kfold = 1
 
 ##Train the network using kfold or train/eval,then, test over the test_dataset
-computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold)
+computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
 
 ##Only eval over test_dateset
-#computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold)
+#computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
 
 
    
