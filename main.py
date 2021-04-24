@@ -130,14 +130,24 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
             
             #Benigna = 0
             #Maligna = 1
-            if(labels.numpy()[0] == 0 and predicted.numpy()[0] == 0):
-               true_negative = true_negative + 1
-            elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 1):
-               true_positive = true_positive + 1
-            elif(labels.numpy()[0] == 0 and predicted.numpy()[0] == 1):
-               false_positive = false_positive + 1        
-            elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 0):
-               false_negative = false_negative + 1    
+            if(torch.cuda.is_available()):
+               if(labels.cpu().numpy()[0] == 0 and predicted.cpu().numpy()[0] == 0):
+                  true_negative = true_negative + 1
+               elif(labels.cpu().numpy()[0] == 1 and predicted.cpu().numpy()[0] == 1):
+                  true_positive = true_positive + 1
+               elif(labels.cpu().numpy()[0] == 0 and predicted.cpu().numpy()[0] == 1):
+                  false_positive = false_positive + 1        
+               elif(labels.cpu().numpy()[0] == 1 and predicted.cpu().numpy()[0] == 0):
+                  false_negative = false_negative + 1    
+            else:
+               if(labels.numpy()[0] == 0 and predicted.numpy()[0] == 0):
+                  true_negative = true_negative + 1
+               elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 1):
+                  true_positive = true_positive + 1
+               elif(labels.numpy()[0] == 0 and predicted.numpy()[0] == 1):
+                  false_positive = false_positive + 1        
+               elif(labels.numpy()[0] == 1 and predicted.numpy()[0] == 0):
+                  false_negative = false_negative + 1    
             
             #if not((predicted == labels).sum().item()):
             #   print('Imagem classificada incorretamente:')
@@ -280,10 +290,10 @@ model_name='alexnet'
 kfold = 1
 
 ##Train the network using kfold or train/eval,then, test over the test_dataset
-computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
+#computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
 
 ##Only eval over test_dateset
-#computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
+computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
 
 
    
