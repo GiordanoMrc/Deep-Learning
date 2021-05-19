@@ -1,5 +1,5 @@
 import Augmentor
-p = Augmentor.Pipeline("imagens")
+p = Augmentor.Pipeline("data/data-exp3-50/train/maligno")
 p.random_brightness(1,0.85,1.15)
 p.rotate_random_90(probability=1)
 p.rotate(probability=0.9, max_left_rotation=0, max_right_rotation=10)
@@ -7,4 +7,4 @@ p.flip_random(probability=0.95)
 p.zoom(probability=1,  min_factor=1.0, max_factor=1.2)
 p.random_distortion(probability=1, grid_width=4, grid_height=4, magnitude=8)
 p.resize(probability=1, width=1000, height=1000)
-p.sample(24090)
+p.sample(11116)

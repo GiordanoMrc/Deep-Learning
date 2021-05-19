@@ -14,6 +14,9 @@ import os
 from tqdm import tqdm
 from time import sleep
 import math
+from matplotlib import pyplot
+from sklearn import metrics
+import numpy as np
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,10 +54,10 @@ def train(model_ft,model_name,model_input_size,grafico,classes,batch,epochs_with
    #optimizer_ft = optim.SGD(params_to_update, lr=0.001,momentum=0.9)
    optimizer_ft = optim.Adam(params_to_update, lr=0.0001)
 
-  # nSamples = [0.5, 1]
-  # class_weights = torch.FloatTensor(nSamples)
-  #print(class_weights)
-  # criterion = nn.CrossEntropyLoss(weight=class_weights)
+   #nSamples = [0.5, 1]
+   #class_weights = torch.FloatTensor(nSamples)
+   #print(class_weights)
+   #criterion = nn.CrossEntropyLoss(weight=class_weights)
    criterion = nn.CrossEntropyLoss()
    #Treinamento,Determina se a forma de treinamento sera por meio de KFOLD ou normal com train/val
    if kfold >= 2:
@@ -82,6 +85,7 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
    #Diretorio de onde o modelo treinado e carregado
    save_dir = "./modelo_treinado/"+model_name+".pth"
    save_dir_confusao = "./modelo_treinado/"+model_name+"-confusao"+".png"
+   save_dir_roc = "./modelo_treinado/"+model_name+"-roc"+".png"
 
    batch = 1
    # Datasets/Dataloaders
@@ -108,6 +112,10 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
    correct = 0
    total = 0
    images_processed = 0
+   true_labels = []
+   roc_probabilities = []
+
+
    #n lembro
    with tqdm(total=math.ceil(len(dataloaders_dict['val'].dataset))) as pbar:
       with torch.no_grad():
@@ -153,10 +161,27 @@ def eval(grafico,model_input_size,model_name,model_ft,inside_trainning):
             #   print('Imagem classificada incorretamente:')
             #   print("Probabilidade BENIGNA : %.2f%% Probabilidade MALIGNA : %.2f%%" % (probabilities.data[0][0].item()*100,probabilities.data[0][1].item()*100) ) #Converted to probabilities
                #imshow(torchvision.utils.make_grid(images_print))
+            roc_probabilities.append(probabilities.data[0][1].item())
+            true_labels.append(labels)
             correct += (predicted == labels).sum().item()
             y.append(correct/total)
             #print('Imagens Processadas : {}'.format(images_processed))
    time_elapsed = time.time() - since
+   roc_probabilities = np.array(roc_probabilities)
+   true_labels = np.array(true_labels)
+
+   x1, y1 = [0, 1], [0, 1]
+   pyplot.plot(x1, y1,linestyle='--')
+   fpr, tpr, thresholds = metrics.roc_curve(true_labels, roc_probabilities)
+   auc = metrics.roc_auc_score(true_labels, roc_probabilities)
+   pyplot.plot(fpr, tpr, marker='.', label='ResNet AUC = '+str(auc))
+   pyplot.xlabel('1 - especificidade')
+   pyplot.ylabel('Sensibilidade')
+   pyplot.legend(loc=4)
+   pyplot.savefig(save_dir_roc)
+
+
+
    print("True Positive (Imagem Maligna classificada como maligna)= %d\nTrue Negative (Imagen Benigna classificada como benigna) = %d\nFalse Positive (Imagem Benigna classificada como maligna) = %d\nFalse Negative(Imagen Maligna classificada como benigna) = %d\n" % (true_positive,true_negative,false_positive,false_negative))
    array = [[true_positive,false_negative],[false_positive,true_negative]]
    df_cm = pd.DataFrame(array, index = [i for i in ["Maligna","Benigna"]],
@@ -280,22 +305,25 @@ def computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,p
    grafico.write_html(save_dir_grafico)
 
 
+def run():
+   torch.multiprocessing.freeze_support()
+   classes = 2
+   batch =  32
+   epochs_without_learning = 5
+   pretrain = True
+   model_name='resnet18'
+   #IF k fold < 2 the trainning will be done with train/val method,otherwise with kfold validation
+   kfold = 1
 
-classes = 2
-batch = 32
-epochs_without_learning = 5
-pretrain = True
-model_name='alexnet'
-#IF k fold < 2 the trainning will be done with train/val method,otherwise with kfold validation
-kfold = 1
+   ##Train the network using kfold or train/eval,then, test over the test_dataset
+   computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
 
-##Train the network using kfold or train/eval,then, test over the test_dataset
-#computate_train_and_eval(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
+   ##Only eval over test_dateset
+   #computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
 
-##Only eval over test_dateset
-computate_eval_only(classes,batch,epochs_without_learning,model_name,kfold,pretrain)
+if __name__ == '__main__':
+   run()
 
 
    
-
 

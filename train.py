@@ -70,6 +70,9 @@ def train_model(model,model_name, dataloaders, criterion, optimizer, grafico, ep
 
                         # Get model outputs and calculate loss
                         outputs = model(inputs)
+                        if(model_name == "googlenet"):
+                            if(phase == "train"):
+                                outputs = outputs.logits
                         loss = criterion(outputs, labels)
 
                         _, preds = torch.max(outputs, 1)

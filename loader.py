@@ -29,7 +29,7 @@ def dataset(data_dir,input_size):
 
 def dataloader(data_dir,dataset,batch):   
    # Create training and validation dataloaders
-   dataloaders_dict = {x: torch.utils.data.DataLoader(dataset[x], batch_size=batch, shuffle=True, num_workers=0) for x in ['train', 'val']}
+   dataloaders_dict = {x: torch.utils.data.DataLoader(dataset[x], batch_size=batch, shuffle=True, num_workers=12) for x in ['train', 'val']}
    return dataloaders_dict
 
 
